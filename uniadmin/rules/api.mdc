@@ -15,6 +15,13 @@ alwaysApply: false
 
 ## uniCloud 云开发API
 
+### 重要提示：优先使用JQL
+根据[uniCloud官方文档](https://doc.dcloud.net.cn/uniCloud/jql.html)，**强烈推荐使用JQL（JavaScript Query Language）操作数据库**：
+- **简化语法**：比传统MongoDB API和SQL更清晰易懂
+- **内置权限**：支持DB Schema权限控制和uni-id角色权限
+- **联表查询**：极大简化了联表查询和树查询的复杂度
+- **类型安全**：配合JSDoc提供完整的类型提示
+
 ### 1. 云对象调用（推荐）
 ```typescript
 // 客户端调用云对象 - 推荐方式
@@ -54,36 +61,77 @@ if (result.result.code === 0) {
 }
 ```
 
-### 3. 云数据库操作
-```typescript
-// 在云对象中操作数据库（推荐）
+### 3. 云数据库操作（JQL推荐）
+```javascript
+// 在云对象中使用JQL操作数据库（推荐）
 module.exports = {
+  /**
+   * 获取用户列表 - JQL语法示例
+   * @param {number} page 页码
+   * @param {number} size 每页数量  
+   * @returns {Promise<Array>} 用户列表
+   */
   async getUserList(page = 1, size = 10) {
-    const db = uniCloud.database()
-    const collection = db.collection('user_info')
+    // 使用JQL数据库操作（推荐）
+    const db = uniCloud.databaseForJQL()
     
-    // 查询数据
-    const { data } = await collection
-      .where({ status: 1 })
-      .orderBy('create_time', 'desc')
+    // JQL语法：简洁明了的查询
+    const result = await db.collection('user_info')
+      .where('status == 1 && deleted != true') // JQL条件表达式
+      .field('username,email,avatar,create_time') // 字段筛选
+      .orderBy('create_time desc') // 排序
       .skip((page - 1) * size)
       .limit(size)
-      .get()
+      .get({
+        getCount: true // 同时获取总数
+      })
     
-    return data
+    return {
+      list: result.data,
+      total: result.count,
+      page,
+      size
+    }
   },
   
+  /**
+   * 添加用户 - JQL语法示例
+   * @param {Object} userInfo 用户信息
+   * @returns {Promise<string>} 用户ID
+   */
   async addUser(userInfo) {
-    const db = uniCloud.database()
-    const collection = db.collection('user_info')
+    // 使用JQL数据库操作（推荐）
+    const db = uniCloud.databaseForJQL()
     
-    // 添加数据
-    const result = await collection.add({
+    // JQL语法添加数据
+    const result = await db.collection('user_info').add({
       ...userInfo,
-      create_time: Date.now()
+      create_time: Date.now(),
+      status: 1,
+      deleted: false
     })
     
     return result.id
+  },
+  
+  /**
+   * 更新用户信息 - JQL语法示例
+   * @param {string} uid 用户ID
+   * @param {Object} updateData 更新数据
+   * @returns {Promise<Object>} 更新结果
+   */
+  async updateUser(uid, updateData) {
+    const db = uniCloud.databaseForJQL()
+    
+    // JQL语法更新数据
+    const result = await db.collection('user_info')
+      .where(`_id == "${uid}" && deleted != true`)
+      .update({
+        ...updateData,
+        update_time: Date.now()
+      })
+    
+    return result
   }
 }
 ```
