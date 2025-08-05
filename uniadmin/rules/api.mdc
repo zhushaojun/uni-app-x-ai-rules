@@ -1,0 +1,489 @@
+---
+description: Uni-Admin API 使用规则
+globs: *.ts,*.vue,*.js
+alwaysApply: false
+---
+# uni-admin API 使用规则
+
+## uni-app 基础API
+- 可以使用uni-app的API，如uni.navigateTo、uni.request等，但注意版本和平台的兼容性。
+- 可以使用vue3的API，如组合式API、响应式API等，但注意版本和平台的兼容性。
+- 可以使用TypeScript的类型定义，通过@dcloudio/types包获取uni-app相关类型。
+- 特定平台或特定版本以上才能使用的代码，需使用条件编译包围这些代码。
+- 生命周期钩子从@dcloudio/uni-app导入，如onLoad、onShow、onReady等。
+- 组合式API中使用onPageShow、onPageHide监听页面可见性变化。
+
+## uniCloud 云开发API
+
+### 1. 云对象调用（推荐）
+```typescript
+// 客户端调用云对象 - 推荐方式
+const adminApi = uniCloud.importObject('admin-api')
+
+try {
+  // 直接调用云对象方法，语法更简洁
+  const userList = await adminApi.getUserList(1, 10)
+  console.log('获取数据成功:', userList)
+  
+  // 其他方法调用
+  const userInfo = await adminApi.getUserInfo('user123')
+  await adminApi.updateUser('user123', { name: '新名称' })
+} catch (error) {
+  console.error('调用失败:', error.message)
+}
+```
+
+### 2. 传统云函数调用（兼容性）
+```typescript
+// 传统云函数调用方式（不推荐新项目使用）
+const result = await uniCloud.callFunction({
+  name: 'admin-api',
+  data: {
+    action: 'getUserList',
+    params: {
+      page: 1,
+      pageSize: 10
+    }
+  }
+})
+
+if (result.result.code === 0) {
+  console.log('获取数据成功:', result.result.data)
+} else {
+  console.error('获取数据失败:', result.result.message)
+}
+```
+
+### 3. 云数据库操作
+```typescript
+// 在云对象中操作数据库（推荐）
+module.exports = {
+  async getUserList(page = 1, size = 10) {
+    const db = uniCloud.database()
+    const collection = db.collection('user_info')
+    
+    // 查询数据
+    const { data } = await collection
+      .where({ status: 1 })
+      .orderBy('create_time', 'desc')
+      .skip((page - 1) * size)
+      .limit(size)
+      .get()
+    
+    return data
+  },
+  
+  async addUser(userInfo) {
+    const db = uniCloud.database()
+    const collection = db.collection('user_info')
+    
+    // 添加数据
+    const result = await collection.add({
+      ...userInfo,
+      create_time: Date.now()
+    })
+    
+    return result.id
+  }
+}
+```
+
+### 4. 云存储操作
+```typescript
+// 在云对象中处理文件上传
+module.exports = {
+  async uploadFile(filePath, folder = 'admin') {
+    // 文件上传
+    const uploadResult = await uniCloud.uploadFile({
+      filePath,
+      cloudPath: `${folder}/images/${Date.now()}.jpg`,
+      cloudPathAsRealPath: true
+    })
+    
+    return uploadResult.fileID
+  },
+  
+  async getFileUrl(fileID) {
+    // 获取文件下载链接
+    const result = await uniCloud.getTempFileURL({
+      fileList: [fileID]
+    })
+    
+    return result.fileList[0].tempFileURL
+  }
+}
+
+// 客户端调用
+const fileApi = uniCloud.importObject('file-api')
+const fileID = await fileApi.uploadFile(tempFilePath, 'admin')
+const downloadURL = await fileApi.getFileUrl(fileID)
+```
+
+## uni-admin 专用API
+
+### 1. 权限验证（云对象方式）
+```typescript
+// 云对象实现权限验证
+const userCenter = uniCloud.importObject('user-center')
+
+// 检查用户登录状态
+const checkLogin = async () => {
+  try {
+    const isValid = await userCenter.checkToken()
+    return isValid
+  } catch (error) {
+    uni.navigateTo({
+      url: '/pages/login/login'
+    })
+    return false
+  }
+}
+
+// 检查用户权限
+const checkPermission = async (permission: string) => {
+  try {
+    return await userCenter.checkPermission(permission)
+  } catch (error) {
+    console.error('权限检查失败:', error.message)
+    return false
+  }
+}
+
+// 云对象实现示例
+module.exports = {
+  _before() {
+    // 统一权限检查
+    this.userInfo = this.getCloudInfo().uniIdToken
+    if (!this.userInfo) {
+      throw new Error('用户未登录')
+    }
+  },
+  
+  async checkToken() {
+    // token有效性检查已在_before中完成
+    return true
+  },
+  
+  async checkPermission(permission) {
+    const userRoles = this.userInfo.role || []
+    return userRoles.includes(permission) || userRoles.includes('admin')
+  }
+}
+```
+
+### 2. 数据管理API（云对象方式）
+```typescript
+// 云对象实现通用数据管理
+const adminApi = uniCloud.importObject('admin-api')
+
+// 直接调用云对象方法，更简洁清晰
+const getUserList = async (page = 1, pageSize = 10) => {
+  const result = await adminApi.getUserList(page, pageSize, { status: 1 })
+  return result
+}
+
+// 云对象实现示例
+module.exports = {
+  async getUserList(page = 1, pageSize = 10, where = {}) {
+    const db = uniCloud.database()
+    const collection = db.collection('user_info')
+    
+    const { data } = await collection
+      .where(where)
+      .skip((page - 1) * pageSize)
+      .limit(pageSize)
+      .get()
+    
+    const { total } = await collection.where(where).count()
+    
+    return {
+      list: data,
+      total,
+      page,
+      pageSize
+    }
+  },
+  
+  async addUser(userData) {
+    const db = uniCloud.database()
+    const result = await db.collection('user_info').add({
+      ...userData,
+      create_time: Date.now()
+    })
+    
+    return result.id
+  },
+  
+  async updateUser(id, userData) {
+    const db = uniCloud.database()
+    await db.collection('user_info').doc(id).update({
+      ...userData,
+      update_time: Date.now()
+    })
+    
+    return true
+  },
+  
+  async deleteUser(id) {
+    const db = uniCloud.database()
+    await db.collection('user_info').doc(id).remove()
+    return true
+  }
+}
+
+// TypeScript类型定义
+interface UserData {
+  username: string
+  email: string
+  role: string[]
+  status: number
+}
+
+interface AdminApiResult<T = any> {
+  list?: T[]
+  total?: number
+  page?: number
+  pageSize?: number
+}
+```
+
+### 3. 统计分析API（云对象方式）
+```typescript
+// 云对象实现统计分析
+const statisticsApi = uniCloud.importObject('statistics-api')
+
+// 获取统计数据
+const getStatistics = async () => {
+  return await statisticsApi.getDashboardData()
+}
+
+// 获取图表数据
+const getChartData = async (chartType: string, dateRange: string) => {
+  return await statisticsApi.getChartData(chartType, dateRange)
+}
+
+// 云对象实现示例
+module.exports = {
+  async getDashboardData() {
+    const db = uniCloud.database()
+    
+    // 并行查询多个统计数据
+    const [userCount, orderCount, revenue] = await Promise.all([
+      db.collection('user_info').count(),
+      db.collection('orders').count(),
+      this._calculateRevenue()
+    ])
+    
+    return {
+      userCount: userCount.total,
+      orderCount: orderCount.total,
+      revenue,
+      updateTime: Date.now()
+    }
+  },
+  
+  async getChartData(chartType, dateRange) {
+    const db = uniCloud.database()
+    const { startDate, endDate } = this._parseDateRange(dateRange)
+    
+    switch (chartType) {
+      case 'user-growth':
+        return await this._getUserGrowthData(startDate, endDate)
+      case 'order-trend':
+        return await this._getOrderTrendData(startDate, endDate)
+      default:
+        throw new Error('不支持的图表类型')
+    }
+  },
+  
+  // 私有方法
+  async _calculateRevenue() {
+    const db = uniCloud.database()
+    const { data } = await db.collection('orders')
+      .where({ status: 'paid' })
+      .get()
+    
+    return data.reduce((sum, order) => sum + order.amount, 0)
+  },
+  
+  _parseDateRange(dateRange) {
+    // 解析日期范围逻辑
+    const now = Date.now()
+    const dayMs = 24 * 60 * 60 * 1000
+    
+    switch (dateRange) {
+      case '7d':
+        return { startDate: now - 7 * dayMs, endDate: now }
+      case '30d':
+        return { startDate: now - 30 * dayMs, endDate: now }
+      default:
+        return { startDate: now - 7 * dayMs, endDate: now }
+    }
+  }
+}
+```
+
+## 错误处理和最佳实践
+
+### 1. 统一错误处理（云对象方式）
+```typescript
+// 云对象客户端统一调用封装
+class CloudObjectWrapper {
+  private objectCache = new Map()
+  
+  getObject(name: string) {
+    if (!this.objectCache.has(name)) {
+      this.objectCache.set(name, uniCloud.importObject(name))
+    }
+    return this.objectCache.get(name)
+  }
+  
+  async call(objectName: string, methodName: string, ...args: any[]) {
+    try {
+      uni.showLoading({ title: '加载中...' })
+      
+      const cloudObject = this.getObject(objectName)
+      const result = await cloudObject[methodName](...args)
+      
+      uni.hideLoading()
+      return result
+    } catch (error) {
+      uni.hideLoading()
+      uni.showToast({
+        title: error.message || '操作失败',
+        icon: 'none'
+      })
+      throw error
+    }
+  }
+}
+
+// 全局使用
+const cloudApi = new CloudObjectWrapper()
+
+// 使用示例
+const userList = await cloudApi.call('admin-api', 'getUserList', 1, 10)
+```
+
+### 2. 分页数据处理（云对象方式）
+```typescript
+// 基于云对象的分页数据管理
+const usePageData = <T = any>(objectName: string, methodName: string) => {
+  const list = ref<T[]>([])
+  const loading = ref(false)
+  const finished = ref(false)
+  const page = ref(1)
+  const pageSize = 10
+  
+  const cloudObject = uniCloud.importObject(objectName)
+  
+  const loadData = async (refresh = false, ...extraArgs: any[]) => {
+    if (loading.value) return
+    
+    if (refresh) {
+      page.value = 1
+      list.value = []
+      finished.value = false
+    }
+    
+    loading.value = true
+    
+    try {
+      // 调用云对象方法
+      const result = await cloudObject[methodName](
+        page.value, 
+        pageSize, 
+        ...extraArgs
+      )
+      
+      const newData = result.list || []
+      
+      if (refresh) {
+        list.value = newData
+      } else {
+        list.value.push(...newData)
+      }
+      
+      if (newData.length < pageSize) {
+        finished.value = true
+      } else {
+        page.value++
+      }
+    } catch (error) {
+      console.error('加载数据失败:', error)
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  return {
+    list,
+    loading,
+    finished,
+    loadData
+  }
+}
+
+// 使用示例
+const { list, loading, finished, loadData } = usePageData('admin-api', 'getUserList')
+
+// 加载数据，可传入额外参数如筛选条件
+await loadData(true, { status: 1 })
+```
+
+### 3. 类型定义
+```typescript
+// 用户信息类型
+interface UserInfo {
+  _id: string
+  username: string
+  email: string
+  role: string[]
+  status: number
+  create_time: number
+  update_time: number
+}
+
+// API响应类型
+interface ApiResponse<T = any> {
+  code: number
+  message: string
+  data: T
+}
+
+// 分页响应类型
+interface PageResponse<T> {
+  list: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+```
+
+## 注意事项
+
+- **推荐使用云对象**：新项目优先选择云对象，享受更好的性能和开发体验。
+- 跨页面通信可使用uni.$emit、uni.$on或全局状态管理。
+- 使用uni.createSelectorQuery需在mounted生命周期后调用。
+- TypeScript项目需配置tsconfig.json，包含@dcloudio/types类型定义。
+- 云对象/云函数调用需要处理网络异常和超时情况。
+- 敏感操作（如删除、权限变更）应在云端进行权限验证。
+- 云对象中可以使用this.getCloudInfo().uniIdToken获取当前用户信息。
+- 大量数据查询时使用分页，避免一次性加载过多数据。
+- 云对象实例会复用，注意避免实例属性污染。
+- 云对象的_before和_after方法可以实现统一的前后置处理。
+
+## 迁移建议
+
+### 从云函数迁移到云对象
+1. **重构调用方式**：从uniCloud.callFunction改为uniCloud.importObject
+2. **拆分switch语句**：将原来的action分发改为独立方法
+3. **利用OOP特性**：使用_before、_after等生命周期方法
+4. **改进错误处理**：利用云对象的异常抛出机制
+5. **优化类型定义**：为云对象方法添加TypeScript类型注解
+
+### 最佳实践建议
+- 新项目直接使用云对象开发
+- 现有云函数项目可逐步迁移
+- 复杂业务逻辑优先考虑云对象的模块化能力
+- 充分利用云对象的实例复用特性提升性能

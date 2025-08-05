@@ -1,0 +1,405 @@
+---
+description: uni-admin后台管理系统UI组件使用指南
+globs: *.vue
+alwaysApply: false
+---
+# uni-admin UI组件库
+
+uni-ui是DCloud提供的跨平台UI组件库，在uni-admin中专门优化了后台管理系统常用组件。
+
+## 安装配置
+
+### 1. easycom自动导入配置
+在pages.json中配置easycom规则，实现组件自动导入：
+
+```json
+{
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^uni-(.*)": "@dcloudio/uni-ui/lib/uni-$1/uni-$1.vue"
+    }
+  }
+}
+```
+
+### 2. 使用方式
+配置easycom后，可直接在template中使用组件，无需手动导入和注册。
+
+## 后台管理专用组件
+
+### 数据展示组件
+- **uni-table**: 数据表格，支持排序、筛选、分页
+- **uni-list**: 列表组件，用于数据列表展示
+- **uni-stat-card**: 统计卡片，展示关键数据指标
+- **uni-badge**: 状态徽标，显示状态和数量
+
+### 表单组件
+- **uni-easyinput**: 增强输入框，内置验证和格式化
+- **uni-data-select**: 数据选择器，支持远程数据源
+- **uni-data-checkbox**: 复选框组，用于批量操作
+- **uni-datetime-picker**: 日期时间选择器
+- **uni-file-picker**: 文件上传组件，支持多文件
+- **uni-forms**: 表单容器，统一管理表单验证
+
+### 反馈组件
+- **uni-popup**: 弹窗组件，用于详情查看和编辑
+- **uni-notice-bar**: 通知栏，显示系统消息
+- **uni-load-more**: 加载更多，分页数据加载
+
+### 导航组件
+- **uni-breadcrumb**: 面包屑导航，显示页面层级
+- **uni-segmented-control**: 分段控制器，标签页切换
+- **uni-steps**: 步骤条，引导用户完成流程
+
+### 操作组件
+- **uni-swipe-action**: 滑动操作，列表项快捷操作
+- **uni-fab**: 浮动操作按钮，快速新增功能
+- **uni-search-bar**: 搜索栏，数据筛选和搜索
+
+### 布局组件
+- **uni-card**: 卡片容器，内容分块展示
+- **uni-collapse**: 折叠面板，节省空间展示信息
+- **uni-grid**: 网格布局，功能模块导航
+
+## 后台管理常用组件示例
+
+### uni-table 数据表格
+```vue
+<template>
+  <view class="admin-table-container">
+    <uni-table 
+      ref="table" 
+      :loading="loading"
+      :data="tableData"
+      :border="true"
+      :stripe="true"
+      @selection-change="handleSelectionChange"
+    >
+      <uni-th align="center" width="50">
+        <checkbox-group @change="selectAll">
+          <checkbox color="#007aff" style="transform: scale(0.7);" />
+        </checkbox-group>
+      </uni-th>
+      <uni-th align="center" width="150">用户名</uni-th>
+      <uni-th align="center" width="200">邮箱</uni-th>
+      <uni-th align="center" width="100">状态</uni-th>
+      <uni-th align="center" width="150">创建时间</uni-th>
+      <uni-th align="center" width="200">操作</uni-th>
+      
+      <uni-tr v-for="(item, index) in tableData" :key="index">
+        <uni-td align="center">
+          <checkbox-group @change="selectItem(item)">
+            <checkbox color="#007aff" style="transform: scale(0.7);" />
+          </checkbox-group>
+        </uni-td>
+        <uni-td>{{ item.username }}</uni-td>
+        <uni-td>{{ item.email }}</uni-td>
+        <uni-td align="center">
+          <uni-badge 
+            :text="item.status === 1 ? '正常' : '禁用'" 
+            :type="item.status === 1 ? 'success' : 'error'"
+          />
+        </uni-td>
+        <uni-td>{{ item.createTime }}</uni-td>
+        <uni-td align="center">
+          <button class="mini-btn" @click="editUser(item)">编辑</button>
+          <button class="mini-btn warn" @click="deleteUser(item)">删除</button>
+        </uni-td>
+      </uni-tr>
+    </uni-table>
+    
+    <!-- 分页组件 -->
+    <uni-load-more 
+      :status="loadStatus"
+      @clickLoadMore="loadMore"
+    />
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive } from 'vue'
+
+const loading = ref(false)
+const tableData = ref([])
+const loadStatus = ref('more')
+
+const handleSelectionChange = (selection: any[]) => {
+  console.log('选中项:', selection)
+}
+
+const editUser = (user: any) => {
+  // 编辑用户逻辑
+}
+
+const deleteUser = (user: any) => {
+  // 删除用户逻辑
+}
+</script>
+```
+
+### uni-forms 表单组件
+```vue
+<template>
+  <uni-forms 
+    ref="form" 
+    :modelValue="formData" 
+    :rules="rules"
+    label-position="top"
+  >
+    <uni-forms-item label="用户名" name="username" required>
+      <uni-easyinput 
+        v-model="formData.username"
+        placeholder="请输入用户名"
+        :clearable="true"
+      />
+    </uni-forms-item>
+    
+    <uni-forms-item label="邮箱" name="email" required>
+      <uni-easyinput 
+        v-model="formData.email"
+        type="email"
+        placeholder="请输入邮箱"
+        :clearable="true"
+      />
+    </uni-forms-item>
+    
+    <uni-forms-item label="用户角色" name="role" required>
+      <uni-data-select
+        v-model="formData.role"
+        :localdata="roleOptions"
+        placeholder="请选择用户角色"
+      />
+    </uni-forms-item>
+    
+    <uni-forms-item label="状态" name="status">
+      <radio-group v-model="formData.status">
+        <label class="radio-item">
+          <radio value="1" color="#007aff" />
+          <text>正常</text>
+        </label>
+        <label class="radio-item">
+          <radio value="0" color="#007aff" />
+          <text>禁用</text>
+        </label>
+      </radio-group>
+    </uni-forms-item>
+    
+    <view class="form-actions">
+      <button type="primary" @click="submit">提交</button>
+      <button @click="reset">重置</button>
+    </view>
+  </uni-forms>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive } from 'vue'
+
+const form = ref()
+const formData = reactive({
+  username: '',
+  email: '',
+  role: '',
+  status: '1'
+})
+
+const rules = {
+  username: {
+    rules: [
+      { required: true, errorMessage: '请输入用户名' },
+      { minLength: 3, maxLength: 20, errorMessage: '用户名长度在3-20位之间' }
+    ]
+  },
+  email: {
+    rules: [
+      { required: true, errorMessage: '请输入邮箱' },
+      { format: 'email', errorMessage: '邮箱格式不正确' }
+    ]
+  }
+}
+
+const roleOptions = [
+  { value: 'admin', text: '管理员' },
+  { value: 'user', text: '普通用户' }
+]
+
+const submit = async () => {
+  try {
+    await form.value.validate()
+    // 提交表单逻辑
+    console.log('表单数据:', formData)
+  } catch (error) {
+    console.log('表单验证失败:', error)
+  }
+}
+</script>
+```
+
+### uni-popup 详情/编辑弹窗
+```vue
+<template>
+  <view>
+    <!-- 触发按钮 -->
+    <button @click="openDetail">查看详情</button>
+    
+    <!-- 详情弹窗 -->
+    <uni-popup ref="detailPopup" type="center" :maskClick="false">
+      <view class="popup-content">
+        <view class="popup-header">
+          <text class="popup-title">用户详情</text>
+          <uni-icons 
+            type="closeempty" 
+            size="18" 
+            @click="closeDetail"
+          />
+        </view>
+        
+        <view class="popup-body">
+          <view class="detail-item">
+            <text class="label">用户名：</text>
+            <text class="value">{{ userDetail.username }}</text>
+          </view>
+          <view class="detail-item">
+            <text class="label">邮箱：</text>
+            <text class="value">{{ userDetail.email }}</text>
+          </view>
+          <view class="detail-item">
+            <text class="label">状态：</text>
+            <uni-badge 
+              :text="userDetail.status === 1 ? '正常' : '禁用'" 
+              :type="userDetail.status === 1 ? 'success' : 'error'"
+            />
+          </view>
+        </view>
+        
+        <view class="popup-footer">
+          <button class="popup-btn" @click="editUser">编辑</button>
+          <button class="popup-btn primary" @click="closeDetail">关闭</button>
+        </view>
+      </view>
+    </uni-popup>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive } from 'vue'
+
+const detailPopup = ref()
+const userDetail = reactive({
+  username: '',
+  email: '',
+  status: 1
+})
+
+const openDetail = () => {
+  // 加载用户详情数据
+  Object.assign(userDetail, {
+    username: '张三',
+    email: 'zhangsan@example.com',
+    status: 1
+  })
+  detailPopup.value.open()
+}
+
+const closeDetail = () => {
+  detailPopup.value.close()
+}
+
+const editUser = () => {
+  // 跳转到编辑页面或打开编辑弹窗
+  closeDetail()
+}
+</script>
+
+<style lang="scss" scoped>
+.popup-content {
+  width: 600rpx;
+  background: white;
+  border-radius: 10rpx;
+  padding: 40rpx;
+}
+
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30rpx;
+}
+
+.popup-title {
+  font-size: 32rpx;
+  font-weight: bold;
+}
+
+.detail-item {
+  display: flex;
+  margin-bottom: 20rpx;
+  align-items: center;
+}
+
+.label {
+  width: 120rpx;
+  color: #666;
+}
+
+.value {
+  flex: 1;
+  color: #333;
+}
+
+.popup-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 20rpx;
+  margin-top: 30rpx;
+}
+
+.popup-btn {
+  padding: 10rpx 30rpx;
+  border: 1rpx solid #ddd;
+  border-radius: 6rpx;
+  background: white;
+  
+  &.primary {
+    background: #007aff;
+    color: white;
+    border-color: #007aff;
+  }
+}
+</style>
+```
+
+## 平台适配特性
+
+- **跨平台兼容**: 所有组件支持H5、小程序、App等平台
+- **nvue支持**: 部分组件支持nvue原生渲染，性能更优
+- **PC适配**: 组件自动适配PC端宽屏和拖拽操作
+- **性能优化**: 使用wxs、bindingx等技术优化交互性能
+
+## 样式定制
+
+### 1. 全局样式变量
+使用uni.scss定义全局样式变量：
+
+```scss
+$uni-color-primary: #007aff;
+$uni-color-success: #4cd964;
+```
+
+### 2. 组件样式覆盖
+使用deep选择器覆盖组件内部样式：
+
+```vue
+<style scoped>
+:deep(.uni-list-item__content) {
+  background-color: #f8f8f8;
+}
+</style>
+```
+
+## 注意事项
+
+- 确保项目已安装@dcloudio/uni-ui依赖
+- 使用TypeScript时，组件props会有完整的类型提示
+- 某些组件在不同平台可能有细微差异，注意测试
+- 组件内部已集成uni统计，可选择是否启用数据统计
