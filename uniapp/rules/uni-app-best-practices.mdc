@@ -27,4 +27,4 @@ uni-app项目使用Vue3+TypeScript开发. TypeScript提供类型安全，Vue3提
     - script标签使用lang="ts"启用TypeScript支持.
     - 优先使用<script setup>语法, 需要时使用defineProps、defineEmits等宏.
     - 生命周期钩子从@dcloudio/uni-app导入使用.
-    - 生成vue页面时, 页面内容需符合vue.mdc、conditional-compilation.mdc、api.mdc、uni-ui-components.mdc、scss.mdc约定的规范.
+    - 生成vue页面时, 页面内容需符合vue.mdc、conditional-compilation.mdc、api.mdc、uni-ui-components.mdc、scss.mdc、unicloud-development.mdc约定的规范.

@@ -1,37 +1,399 @@
 ---
-description: Uni-App X conditional compilation
-globs: *.uts,*.uvue,*.css,*.less,*.scss,*.ts,*.js,*.sass,*.json
+description: Uni-App 条件编译规则
+globs: *.vue,*.scss,*.css,*.less,*.ts,*.js,*.json
 alwaysApply: false
 ---
-# conditional compilation
+# 条件编译
 
-## core syntax
-```
-// Platform basic judgment
-#ifdef APP || MP
-  //Mini programs/APP common code
-  #ifdef APP-ANDROID
-    // Android-specific logic
-  #endif
-  #ifdef APP-IOS
-    // IOS-specific logic
-  #endif
-#endif
+## 核心语法
+```javascript
+// 平台基础判断
+// #ifdef APP || MP
+  // 小程序/APP通用代码
+  // #ifdef APP-ANDROID
+    // Android特定逻辑
+  // #endif
+  // #ifdef APP-IOS
+    // iOS特定逻辑
+  // #endif
+// #endif
 ```
 
-## Core Platform Identifier
-uniVersion is used to distinguish the version of the compiler Details HBuilderX 3.9.0 
-APP App
-APP-ANDROID App Android Platform Details
-APP-IOS App iOS Platform Details
-APP-HARMONY App HarmonyOS Next platform
-WEB web (same as H5) HBuilderX 3.6.3 
-MP-WEIXIN WeChat Mini Program
-MP-ALIPAY APPLET
-MP-BAIDU BAIDU MINI PROGRAM
-MP-TUTIAO TIKTOK MINI PROGRAM
-MP-KUAISHOU Kuaishou Mini Program
-MP-JD JD Mini Program
-MP-HARMONY Harmony Atom Service HBuilderX 4.34 
-MP-XHS Xiaohongshu Mini Program
-MP WeChat Mini Program/Alipay Mini Program/Baidu Mini Program/Douyin Mini Program/Feishu Mini Program/QQ Mini Program/360 Mini Program/Hongmeng atom Service
+## 主要平台标识符
+
+### 应用平台
+- **APP**: App平台
+- **APP-ANDROID**: App Android平台
+- **APP-IOS**: App iOS平台
+- **APP-HARMONY**: App HarmonyOS Next平台
+- **H5**: H5平台（web端）
+
+### 小程序平台
+- **MP-WEIXIN**: 微信小程序
+- **MP-ALIPAY**: 支付宝小程序
+- **MP-BAIDU**: 百度小程序
+- **MP-TOUTIAO**: 抖音小程序
+- **MP-KUAISHOU**: 快手小程序
+- **MP-JD**: 京东小程序
+- **MP-HARMONY**: 鸿蒙原子化服务
+- **MP-XHS**: 小红书小程序
+- **MP**: 所有小程序平台（微信/支付宝/百度/抖音等）
+
+### 组合使用
+- **APP || H5**: App平台或H5平台
+- **MP-WEIXIN || MP-ALIPAY**: 微信小程序或支付宝小程序
+- **!H5**: 除H5外的所有平台
+
+## 使用场景示例
+
+### 1. Vue模板中的条件编译
+```vue
+<template>
+  <view class="container">
+    <!-- APP端显示原生导航栏 -->
+    <!-- #ifdef APP -->
+    <view class="status-bar"></view>
+    <view class="nav-bar">
+      <text class="title">{{ title }}</text>
+    </view>
+    <!-- #endif -->
+    
+    <!-- H5端使用浏览器标题 -->
+    <!-- #ifdef H5 -->
+    <view class="h5-header">
+      <text>{{ title }}</text>
+    </view>
+    <!-- #endif -->
+    
+    <!-- 小程序平台特殊处理 -->
+    <!-- #ifdef MP -->
+    <view class="mp-container">
+      <text>小程序内容</text>
+    </view>
+    <!-- #endif -->
+    
+    <view class="content">
+      <!-- 微信小程序特有功能 -->
+      <!-- #ifdef MP-WEIXIN -->
+      <button @click="shareToFriend">分享给朋友</button>
+      <!-- #endif -->
+      
+      <!-- 支付宝小程序特有功能 -->
+      <!-- #ifdef MP-ALIPAY -->
+      <button @click="aliPay">支付宝支付</button>
+      <!-- #endif -->
+    </view>
+  </view>
+</template>
+```
+
+### 2. JavaScript/TypeScript中的条件编译
+```typescript
+<script setup lang="ts">
+import { ref } from 'vue'
+
+// 导入平台特定模块
+// #ifdef APP
+import { plus } from '@/utils/plus'
+// #endif
+
+// #ifdef H5
+import { webUtils } from '@/utils/web'
+// #endif
+
+const title = ref('应用标题')
+
+// 平台特定方法
+const shareToFriend = () => {
+  // #ifdef MP-WEIXIN
+  wx.shareAppMessage({
+    title: title.value,
+    path: '/pages/index/index'
+  })
+  // #endif
+  
+  // #ifdef APP
+  plus.share.sendWithSystem({
+    type: 'text',
+    content: title.value
+  })
+  // #endif
+  
+  // #ifdef H5
+  if (navigator.share) {
+    navigator.share({
+      title: title.value,
+      url: window.location.href
+    })
+  } else {
+    webUtils.copyToClipboard(window.location.href)
+  }
+  // #endif
+}
+
+// API调用的平台适配
+const getSystemInfo = () => {
+  // #ifdef APP || MP
+  uni.getSystemInfo({
+    success: (res) => {
+      console.log('系统信息:', res)
+    }
+  })
+  // #endif
+  
+  // #ifdef H5
+  const info = {
+    platform: navigator.platform,
+    userAgent: navigator.userAgent,
+    windowWidth: window.innerWidth,
+    windowHeight: window.innerHeight
+  }
+  console.log('系统信息:', info)
+  // #endif
+}
+</script>
+```
+
+### 3. SCSS样式中的条件编译
+```scss
+<style lang="scss" scoped>
+.container {
+  background-color: $uni-bg-color;
+  
+  /* APP端样式 */
+  /* #ifdef APP */
+  padding-top: var(--status-bar-height);
+  /* #endif */
+  
+  /* H5端样式 */
+  /* #ifdef H5 */
+  max-width: 1200px;
+  margin: 0 auto;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  /* #endif */
+  
+  /* 小程序端样式 */
+  /* #ifdef MP */
+  border-radius: 0;
+  /* #endif */
+}
+
+.nav-bar {
+  /* #ifdef APP-IOS */
+  background-color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  /* #endif */
+  
+  /* #ifdef APP-ANDROID */
+  background-color: $uni-color-primary;
+  /* #endif */
+}
+
+/* 微信小程序特有样式 */
+/* #ifdef MP-WEIXIN */
+.mp-container {
+  /* 适配微信小程序的安全区域 */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+/* #endif */
+
+/* H5响应式样式 */
+/* #ifdef H5 */
+@media screen and (max-width: 768px) {
+  .container {
+    padding: $uni-spacing-row-sm;
+  }
+}
+/* #endif */
+</style>
+```
+
+### 4. API接口的平台适配
+```typescript
+// utils/request.ts
+class Request {
+  private baseURL: string
+  
+  constructor() {
+    // #ifdef H5
+    this.baseURL = 'https://api.example.com'
+    // #endif
+    
+    // #ifdef APP
+    this.baseURL = 'https://app-api.example.com'
+    // #endif
+    
+    // #ifdef MP
+    this.baseURL = 'https://mp-api.example.com'
+    // #endif
+  }
+  
+  async request(options: any) {
+    // #ifdef APP || MP
+    return uni.request({
+      url: this.baseURL + options.url,
+      ...options
+    })
+    // #endif
+    
+    // #ifdef H5
+    return fetch(this.baseURL + options.url, {
+      method: options.method || 'GET',
+      headers: options.headers,
+      body: JSON.stringify(options.data)
+    }).then(res => res.json())
+    // #endif
+  }
+}
+```
+
+### 5. 存储的平台适配
+```typescript
+// utils/storage.ts
+export class Storage {
+  static setItem(key: string, value: any): void {
+    // #ifdef APP || MP
+    uni.setStorageSync(key, value)
+    // #endif
+    
+    // #ifdef H5
+    localStorage.setItem(key, JSON.stringify(value))
+    // #endif
+  }
+  
+  static getItem(key: string): any {
+    // #ifdef APP || MP
+    return uni.getStorageSync(key)
+    // #endif
+    
+    // #ifdef H5
+    const value = localStorage.getItem(key)
+    return value ? JSON.parse(value) : null
+    // #endif
+  }
+  
+  static removeItem(key: string): void {
+    // #ifdef APP || MP
+    uni.removeStorageSync(key)
+    // #endif
+    
+    // #ifdef H5
+    localStorage.removeItem(key)
+    // #endif
+  }
+}
+```
+
+## 配置文件中的条件编译
+
+### pages.json配置
+```json
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "首页",
+        // #ifdef APP
+        "app-plus": {
+          "titleNView": {
+            "buttons": [
+              {
+                "text": "分享",
+                "fontSize": "16px"
+              }
+            ]
+          }
+        }
+        // #endif
+      }
+    }
+  ],
+  // #ifdef MP-WEIXIN
+  "permission": {
+    "scope.userLocation": {
+      "desc": "你的位置信息将用于小程序位置接口的效果展示"
+    }
+  }
+  // #endif
+}
+```
+
+### manifest.json配置
+```json
+{
+  "name": "uni-app-demo",
+  "appid": "__UNI__XXXXXX",
+  // #ifdef APP
+  "app-plus": {
+    "usingComponents": true,
+    "nvueStyleCompiler": "uni-app",
+    "compilerVersion": 3,
+    "modules": {
+      "Share": {}
+    }
+  }
+  // #endif
+  
+  // #ifdef H5
+  "h5": {
+    "router": {
+      "mode": "hash"
+    },
+    "devServer": {
+      "port": 8080
+    }
+  }
+  // #endif
+  
+  // #ifdef MP-WEIXIN
+  "mp-weixin": {
+    "appid": "wxXXXXXXXX",
+    "setting": {
+      "urlCheck": false
+    }
+  }
+  // #endif
+}
+```
+
+## 注意事项
+
+### 1. 编译原理
+- 条件编译是在编译时处理的，不会影响运行时性能
+- 不符合条件的代码块会被完全移除，不会包含在最终的包中
+- 支持嵌套使用，但要注意逻辑的清晰性
+
+### 2. 最佳实践
+- 优先使用uni-app提供的跨平台API
+- 只在确实需要平台特性时才使用条件编译
+- 保持条件编译逻辑简单明了
+- 注释说明平台特定代码的作用
+
+### 3. 常见错误
+```typescript
+// ❌ 错误：条件编译注释格式不正确
+/* ifdef APP */
+// 代码
+/* endif */
+
+// ✅ 正确：使用正确的注释格式
+// #ifdef APP
+// 代码
+// #endif
+
+// ❌ 错误：在TypeScript中使用错误的注释
+/* #ifdef APP */
+const appCode = true
+/* #endif */
+
+// ✅ 正确：使用双斜杠注释
+// #ifdef APP
+const appCode = true
+// #endif
+```
+
+### 4. 调试技巧
+- 使用HBuilderX的条件编译高亮功能
+- 在开发者工具中验证编译结果
+- 保持版本控制中条件编译代码的一致性

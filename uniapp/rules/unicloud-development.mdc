@@ -1,0 +1,489 @@
+---
+description: uniCloud开发规范 - 仅通过admin云对象操作数据库
+globs: *.vue,*.ts,*.js
+alwaysApply: false
+---
+# uniCloud 开发规范
+
+## 核心原则：严格分离数据访问层
+
+### 🚫 严禁行为
+- **禁止在uni-app项目中直接操作数据库**
+- **禁止在uni-app中使用uniCloud.database()进行CRUD操作**
+- **禁止绕过admin项目直接访问数据库**
+- **禁止在uni-app中创建云函数进行数据库操作**
+
+### ✅ 强制要求
+- **必须通过admin项目定义的云对象进行所有数据库操作**
+- **所有数据访问逻辑集中在admin项目管理**
+- **uni-app仅作为前端展示层，调用云对象接口**
+
+## 正确的开发模式
+
+### 1. Admin项目 - 数据访问层
+```js
+// admin/uniCloud-aliyun/cloudfunctions/user-center/index.obj.js
+module.exports = {
+  // 获取用户列表
+  async getUserList(params) {
+    const db = uniCloud.database()
+    const { pageNum = 1, pageSize = 10, keyword } = params
+    
+    // 权限验证
+    if (!this.getUniIdToken()) {
+      throw new Error('未登录')
+    }
+    
+    // 数据库查询
+    const query = db.collection('users')
+    if (keyword) {
+      query.where({
+        name: new RegExp(keyword, 'i')
+      })
+    }
+    
+    const result = await query
+      .skip((pageNum - 1) * pageSize)
+      .limit(pageSize)
+      .get()
+    
+    return {
+      code: 0,
+      data: result.data,
+      total: result.affectedDocs
+    }
+  },
+  
+  // 创建用户
+  async createUser(userData) {
+    const db = uniCloud.database()
+    
+    // 权限验证 - 仅管理员可创建
+    const userInfo = this.getUniIdToken()
+    if (!userInfo || userInfo.role !== 'admin') {
+      throw new Error('权限不足')
+    }
+    
+    // 数据验证
+    if (!userData.name || !userData.email) {
+      throw new Error('用户名和邮箱为必填项')
+    }
+    
+    // 数据库操作
+    const result = await db.collection('users').add({
+      ...userData,
+      createTime: Date.now(),
+      updateTime: Date.now()
+    })
+    
+    return {
+      code: 0,
+      data: { id: result.id },
+      message: '用户创建成功'
+    }
+  },
+  
+  // 更新用户
+  async updateUser(userId, updateData) {
+    const db = uniCloud.database()
+    
+    // 权限验证
+    const userInfo = this.getUniIdToken()
+    if (!userInfo) {
+      throw new Error('未登录')
+    }
+    
+    // 数据库操作
+    const result = await db.collection('users').doc(userId).update({
+      ...updateData,
+      updateTime: Date.now()
+    })
+    
+    return {
+      code: 0,
+      message: '更新成功'
+    }
+  },
+  
+  // 删除用户
+  async deleteUser(userId) {
+    const db = uniCloud.database()
+    
+    // 权限验证 - 仅管理员可删除
+    const userInfo = this.getUniIdToken()
+    if (!userInfo || userInfo.role !== 'admin') {
+      throw new Error('权限不足')
+    }
+    
+    // 数据库操作
+    await db.collection('users').doc(userId).remove()
+    
+    return {
+      code: 0,
+      message: '删除成功'
+    }
+  }
+}
+```
+
+### 2. uni-app项目 - 前端调用层
+```vue
+<template>
+  <view class="user-management">
+    <uni-list>
+      <uni-list-item 
+        v-for="user in userList" 
+        :key="user._id"
+        :title="user.name"
+        :note="user.email"
+        @click="editUser(user)"
+      />
+    </uni-list>
+    
+    <uni-fab 
+      :pattern="fabPattern"
+      @trigger="createUser"
+    />
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+
+// 类型定义
+interface User {
+  _id: string
+  name: string
+  email: string
+  createTime: number
+}
+
+interface ApiResponse<T> {
+  code: number
+  data: T
+  message?: string
+  total?: number
+}
+
+// 响应式数据
+const userList = ref<User[]>([])
+const loading = ref(false)
+
+// ✅ 正确：通过云对象调用数据接口
+const getUserList = async (params: {
+  pageNum?: number
+  pageSize?: number
+  keyword?: string
+} = {}) => {
+  try {
+    loading.value = true
+    
+    // 调用admin项目的云对象
+    const result = await uniCloud.callFunction({
+      name: 'user-center',
+      data: {
+        action: 'getUserList',
+        params
+      }
+    }) as { result: ApiResponse<User[]> }
+    
+    if (result.result.code === 0) {
+      userList.value = result.result.data
+    } else {
+      uni.showToast({
+        title: result.result.message || '获取用户列表失败',
+        icon: 'error'
+      })
+    }
+  } catch (error) {
+    console.error('获取用户列表失败:', error)
+    uni.showToast({
+      title: '网络错误',
+      icon: 'error'
+    })
+  } finally {
+    loading.value = false
+  }
+}
+
+// ✅ 正确：创建用户通过云对象
+const createUser = async () => {
+  try {
+    const userData = {
+      name: '新用户',
+      email: 'new@example.com'
+    }
+    
+    // 调用admin项目的云对象
+    const result = await uniCloud.callFunction({
+      name: 'user-center',
+      data: {
+        action: 'createUser',
+        userData
+      }
+    }) as { result: ApiResponse<{ id: string }> }
+    
+    if (result.result.code === 0) {
+      uni.showToast({
+        title: '创建成功',
+        icon: 'success'
+      })
+      // 刷新列表
+      await getUserList()
+    } else {
+      uni.showToast({
+        title: result.result.message || '创建失败',
+        icon: 'error'
+      })
+    }
+  } catch (error) {
+    console.error('创建用户失败:', error)
+    uni.showToast({
+      title: '创建失败',
+      icon: 'error'
+    })
+  }
+}
+
+// ✅ 正确：更新用户通过云对象
+const editUser = async (user: User) => {
+  try {
+    const updateData = {
+      name: user.name + '_updated'
+    }
+    
+    // 调用admin项目的云对象
+    const result = await uniCloud.callFunction({
+      name: 'user-center',
+      data: {
+        action: 'updateUser',
+        userId: user._id,
+        updateData
+      }
+    }) as { result: ApiResponse<void> }
+    
+    if (result.result.code === 0) {
+      uni.showToast({
+        title: '更新成功',
+        icon: 'success'
+      })
+      await getUserList()
+    }
+  } catch (error) {
+    console.error('更新用户失败:', error)
+  }
+}
+
+onMounted(() => {
+  getUserList()
+})
+</script>
+```
+
+## ❌ 错误示例 - 禁止以下做法
+
+### 1. 禁止在uni-app中直接操作数据库
+```typescript
+// ❌ 严禁：直接在uni-app中操作数据库
+const getUserList = async () => {
+  // 这是错误的做法！
+  const db = uniCloud.database()
+  const result = await db.collection('users').get()
+  return result.data
+}
+
+// ❌ 严禁：在uni-app中执行数据库查询
+const searchUsers = async (keyword: string) => {
+  // 这是错误的做法！
+  const db = uniCloud.database()
+  const result = await db.collection('users')
+    .where({
+      name: new RegExp(keyword, 'i')
+    })
+    .get()
+  return result.data
+}
+```
+
+### 2. 禁止在uni-app中创建数据库操作云函数
+```javascript
+// ❌ 严禁：在uni-app项目中创建此类云函数
+// uniCloud-aliyun/cloudfunctions/user-crud/index.js
+exports.main = async (event, context) => {
+  const db = uniCloud.database()
+  // 这种做法是被禁止的！
+  return await db.collection('users').get()
+}
+```
+
+## 架构优势
+
+### 1. 安全性增强
+- **权限集中管理**：所有数据访问权限在admin项目统一控制
+- **防止SQL注入**：数据验证和过滤集中在服务端
+- **API统一验证**：避免前端绕过安全检查
+
+### 2. 代码维护性
+- **逻辑集中**：所有业务逻辑在admin项目中维护
+- **接口标准化**：统一的API调用方式和返回格式
+- **职责分离**：前端专注UI展示，后端专注数据处理
+
+### 3. 团队协作
+- **分工明确**：前端开发者专注UI，后端开发者专注数据逻辑
+- **版本控制**：数据库schema变更通过admin项目统一管理
+- **API文档**：云对象接口作为标准API文档
+
+## TypeScript类型定义
+
+### 1. 云对象调用类型
+```typescript
+// types/unicloud.ts
+export interface CloudObjectResponse<T = any> {
+  result: {
+    code: number
+    data: T
+    message?: string
+    total?: number
+  }
+}
+
+export interface CloudObjectParams {
+  name: string
+  data: {
+    action: string
+    [key: string]: any
+  }
+}
+
+// 用户相关类型
+export interface User {
+  _id: string
+  name: string
+  email: string
+  avatar?: string
+  role?: string
+  createTime: number
+  updateTime: number
+}
+
+export interface UserListParams {
+  pageNum?: number
+  pageSize?: number
+  keyword?: string
+  role?: string
+}
+```
+
+### 2. 云对象调用封装
+```typescript
+// utils/cloud-api.ts
+class CloudAPI {
+  // 封装云对象调用
+  private async callCloudObject<T>(
+    objectName: string, 
+    action: string, 
+    params: any = {}
+  ): Promise<T> {
+    try {
+      const result = await uniCloud.callFunction({
+        name: objectName,
+        data: {
+          action,
+          ...params
+        }
+      }) as CloudObjectResponse<T>
+      
+      if (result.result.code !== 0) {
+        throw new Error(result.result.message || '请求失败')
+      }
+      
+      return result.result.data
+    } catch (error) {
+      console.error(`云对象调用失败 ${objectName}.${action}:`, error)
+      throw error
+    }
+  }
+  
+  // 用户相关API
+  async getUserList(params: UserListParams): Promise<User[]> {
+    return this.callCloudObject<User[]>('user-center', 'getUserList', { params })
+  }
+  
+  async createUser(userData: Partial<User>): Promise<{ id: string }> {
+    return this.callCloudObject('user-center', 'createUser', { userData })
+  }
+  
+  async updateUser(userId: string, updateData: Partial<User>): Promise<void> {
+    return this.callCloudObject('user-center', 'updateUser', { userId, updateData })
+  }
+  
+  async deleteUser(userId: string): Promise<void> {
+    return this.callCloudObject('user-center', 'deleteUser', { userId })
+  }
+}
+
+export const cloudAPI = new CloudAPI()
+```
+
+## 错误处理规范
+
+### 1. 云对象错误处理
+```typescript
+// 在组合式API中使用
+const useUserAPI = () => {
+  const loading = ref(false)
+  const error = ref<string>('')
+  
+  const handleCloudError = (err: any) => {
+    console.error('云对象调用失败:', err)
+    error.value = err.message || '操作失败'
+    uni.showToast({
+      title: error.value,
+      icon: 'error'
+    })
+  }
+  
+  const getUserList = async (params: UserListParams) => {
+    try {
+      loading.value = true
+      error.value = ''
+      return await cloudAPI.getUserList(params)
+    } catch (err) {
+      handleCloudError(err)
+      return []
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  return {
+    loading: readonly(loading),
+    error: readonly(error),
+    getUserList
+  }
+}
+```
+
+## 开发流程规范
+
+### 1. 需求分析阶段
+- 前端开发者提出数据需求
+- 后端开发者在admin项目中设计云对象接口
+- 确定接口参数、返回值格式和错误处理
+
+### 2. 接口开发阶段
+- 后端在admin项目中实现云对象方法
+- 包含权限验证、数据验证、业务逻辑
+- 提供接口文档和测试用例
+
+### 3. 前端调用阶段
+- 前端通过uniCloud.callFunction调用云对象
+- 使用TypeScript类型确保类型安全
+- 实现统一的错误处理和加载状态
+
+### 4. 测试部署阶段
+- admin项目优先部署和测试
+- 前端基于稳定的云对象接口进行开发
+- 确保权限控制和数据安全
+
+通过严格遵循这套规范，确保uniCloud项目的安全性、可维护性和团队协作效率。
