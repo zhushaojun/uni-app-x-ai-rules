@@ -1,0 +1,167 @@
+---
+description: uni-ui组件库使用指南
+globs: *.vue
+alwaysApply: false
+---
+# uni-ui 组件库
+
+uni-ui是DCloud提供的跨平台UI组件库，包含丰富的Vue组件，支持所有uni-app平台。
+
+## 安装配置
+
+### 1. easycom自动导入配置
+在pages.json中配置easycom规则，实现组件自动导入：
+
+```json
+{
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^uni-(.*)": "@dcloudio/uni-ui/lib/uni-$1/uni-$1.vue"
+    }
+  }
+}
+```
+
+### 2. 使用方式
+配置easycom后，可直接在template中使用组件，无需手动导入和注册。
+
+## 主要组件分类
+
+### 基础组件
+- **uni-badge**: 徽标数字，用于显示消息数量
+- **uni-transition**: 过渡动画组件
+- **uni-rate**: 评分组件，支持半星评分
+
+### 布局组件
+- **uni-grid**: 网格布局，常用于图标导航
+- **uni-list**: 列表组件，支持点击反馈和导航
+- **uni-collapse**: 折叠面板组件
+
+### 表单组件
+- **uni-easyinput**: 增强输入框，内置表单验证
+- **uni-data-checkbox**: 数据选择框，支持单选多选
+- **uni-data-select**: 数据选择器
+- **uni-combox**: 组合框（输入+下拉选择）
+- **uni-file-picker**: 文件上传组件
+
+### 反馈组件
+- **uni-popup**: 弹窗组件，支持多种弹出方式
+- **uni-drawer**: 抽屉组件，侧边滑出
+- **uni-tooltip**: 工具提示组件
+
+### 导航组件
+- **uni-breadcrumb**: 面包屑导航
+- **uni-indexed-list**: 索引列表（如通讯录）
+- **uni-goods-nav**: 商品导航栏
+
+### 操作组件
+- **uni-swipe-action**: 滑动操作，支持左滑删除等
+- **uni-fab**: 浮动操作按钮
+
+## 常用组件示例
+
+### uni-list 列表组件
+```vue
+<template>
+  <uni-list>
+    <uni-list-item 
+      title="列表项标题" 
+      note="描述信息"
+      :clickable="true"
+      :link="true"
+      to="/pages/detail/detail"
+    />
+  </uni-list>
+</template>
+```
+
+### uni-grid 网格组件
+```vue
+<template>
+  <uni-grid :column="3" :square="true" @change="gridClick">
+    <uni-grid-item v-for="(item, index) in list" :key="index">
+      <view class="grid-content">
+        <uni-badge :text="item.badge" />
+        <text>{{ item.name }}</text>
+      </view>
+    </uni-grid-item>
+  </uni-grid>
+</template>
+```
+
+### uni-popup 弹窗组件
+```vue
+<template>
+  <view>
+    <uni-popup ref="popup" type="center">
+      <view class="popup-content">弹窗内容</view>
+    </uni-popup>
+    <button @click="openPopup">打开弹窗</button>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const popup = ref()
+
+const openPopup = () => {
+  popup.value.open()
+}
+</script>
+```
+
+### uni-easyinput 输入组件
+```vue
+<template>
+  <uni-easyinput 
+    v-model="inputValue"
+    placeholder="请输入内容"
+    :clearable="true"
+    :errorMessage="errorMsg"
+  />
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+
+const inputValue = ref('')
+const errorMsg = ref('')
+</script>
+```
+
+## 平台适配特性
+
+- **跨平台兼容**: 所有组件支持H5、小程序、App等平台
+- **nvue支持**: 部分组件支持nvue原生渲染，性能更优
+- **PC适配**: 组件自动适配PC端宽屏和拖拽操作
+- **性能优化**: 使用wxs、bindingx等技术优化交互性能
+
+## 样式定制
+
+### 1. 全局样式变量
+使用uni.scss定义全局样式变量：
+
+```scss
+$uni-color-primary: #007aff;
+$uni-color-success: #4cd964;
+```
+
+### 2. 组件样式覆盖
+使用deep选择器覆盖组件内部样式：
+
+```vue
+<style scoped>
+:deep(.uni-list-item__content) {
+  background-color: #f8f8f8;
+}
+</style>
+```
+
+## 注意事项
+
+- 确保项目已安装@dcloudio/uni-ui依赖
+- 使用TypeScript时，组件props会有完整的类型提示
+- 某些组件在不同平台可能有细微差异，注意测试
+- 组件内部已集成uni统计，可选择是否启用数据统计
