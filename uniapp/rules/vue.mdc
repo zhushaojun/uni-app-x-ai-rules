@@ -1,0 +1,22 @@
+---
+description: Vue3 TypeScript 开发规则
+globs: *.vue
+alwaysApply: false
+---
+# Vue3 规则
+## Vue3 支持
+- 仅使用Vue3语法, 避免使用Vue2.
+- 新页面和组件优先使用组合式API(Composition API).
+- 使用<script setup>语法简化代码结构.
+- 组件尽量使用easycom规范自动注册.
+- 支持使用pinia进行状态管理, 推荐用于复杂应用的状态管理.
+- 使用Vue语法时需注意uni-app官网的平台和版本兼容性, 平台特殊代码需包裹在条件编译中.
+- TypeScript项目中的Vue组件使用lang="ts"启用类型检查.
+
+## 组件开发
+- 组件可使用uni-app内置组件, 以及项目下的自定义组件.
+- 项目使用Vue.js组件规范,对应的文件扩展名为.vue.
+- 符合easycom规范的组件无需import和注册,可直接在template中使用.
+- 使用内置组件时需注意uni-app官网的平台和版本兼容性, 平台特殊代码需包裹在条件编译中.
+- 组合式API中使用defineProps、defineEmits定义组件接口.
+- 使用defineExpose暴露组件方法给父组件调用.

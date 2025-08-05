@@ -1,0 +1,1007 @@
+---
+description: uniCloud云开发规则和最佳实践 - 云对象优先
+globs: *.js,*.ts,*.json
+alwaysApply: false
+---
+# uniCloud 云开发规则
+
+## 云开发环境
+- uniCloud是DCloud提供的云开发平台，支持云对象、云函数、云数据库、云存储等。
+- 支持阿里云和腾讯云，推荐使用阿里云服务空间。
+- **重要变化**: 现在推荐使用云对象代替传统云函数，享受更好的性能和开发体验。
+- 开发时使用本地调试，发布时上传到云端。
+
+## 云对象开发（推荐）
+
+### 1. 云对象简介
+云对象是uniCloud推荐的新一代云端代码组织方式，**官方明确表示：从云对象发布后，不再推荐使用传统云函数了**。
+
+云对象采用全新的开发模式：
+- **思路更清晰**：服务器编写API，客户端调用API，不再开发传输json的接口
+- **代码更精简**：相比传统接口方式，代码行数大幅减少
+- **更好的性能**：避免冷启动问题，响应更快
+- **面向对象编程**：支持类和实例，代码组织更清晰
+- **自动路由**：基于方法名自动路由，无需手动配置
+- **更好的开发体验**：支持完整的jsdoc+语法提示，增强代码可读性
+- **实例复用**：同一个云对象实例可以处理多个请求
+
+### 2. 云对象基本结构
+```javascript
+// 云对象文件：uniCloud/cloudfunctions/user-center/index.obj.js
+// 注意：云对象入口文件必须是 index.obj.js（不是index.js）
+
+/**
+ * 用户管理云对象
+ */
+module.exports = {
+  /**
+   * 预处理方法 - 每次调用云对象方法前执行
+   */
+  _before() {
+    // 统一的权限验证和初始化
+    this.startTime = Date.now()
+    this.userInfo = this.getCloudInfo().uniIdToken
+    
+    // 记录请求日志
+    console.log(`[${new Date().toISOString()}] 调用方法: ${this.getMethodName()}`)
+  },
+  
+  /**
+   * 后处理方法 - 每次调用云对象方法后执行
+   * @param {Error} error 执行过程中的错误
+   * @param {any} result 方法返回结果
+   */
+  _after(error, result) {
+    const duration = Date.now() - this.startTime
+    console.log(`执行耗时: ${duration}ms`)
+    
+    if (error) {
+      console.error('方法执行错误:', error)
+      // 统一错误处理，符合uniCloud响应体规范
+      return {
+        errCode: error.errCode || 'SYSTEM_ERROR',
+        errMsg: error.message || '系统错误'
+      }
+    }
+    
+    return result
+  },
+  
+  /**
+   * 获取用户信息
+   * @param {string} uid 用户ID
+   * @returns {object} 用户信息
+   */
+  async getUserInfo(uid) {
+    if (!uid) {
+      throw new Error('用户ID不能为空')
+    }
+    
+    // 使用JQL操作数据库（推荐）
+    const db = uniCloud.databaseForJQL()
+    const result = await db.collection('user_info')
+      .where(`_id == "${uid}"`)
+      .getOne()
+    
+    if (!result.data) {
+      throw new Error('用户不存在')
+    }
+    
+    return {
+      errCode: 0,
+      data: result.data
+    }
+  },
+  
+  /**
+   * 更新用户信息
+   * @param {string} uid 用户ID
+   * @param {object} userInfo 用户信息
+   * @returns {object} 更新结果
+   */
+  async updateUserInfo(uid, userInfo) {
+    // 权限验证
+    this._checkPermission(uid)
+    
+    // 使用JQL操作数据库（推荐）
+    const db = uniCloud.databaseForJQL()
+    const result = await db.collection('user_info')
+      .where(`_id == "${uid}"`)
+      .update({
+        ...userInfo,
+        update_time: Date.now()
+      })
+    
+    return {
+      errCode: 0,
+      data: result
+    }
+  },
+  
+  /**
+   * 私有方法 - 权限检查（以_开头的方法客户端无法调用）
+   * @param {string} uid 用户ID
+   */
+  _checkPermission(uid) {
+    if (!this.userInfo) {
+      throw new Error('用户未登录')
+    }
+    
+    if (this.userInfo.uid !== uid && !this.userInfo.role.includes('admin')) {
+      throw new Error('无权限操作')
+    }
+  }
+}
+```
+
+### 3. 客户端调用云对象
+```javascript
+// 基础调用方式
+const userCenter = uniCloud.importObject('user-center')
+
+try {
+  // 调用云对象方法，自动显示loading和错误提示
+  const result = await userCenter.getUserInfo('user123')
+  console.log('用户信息:', result.data)
+  
+  // 更新用户信息
+  await userCenter.updateUserInfo('user123', {
+    nickname: '新昵称',
+    avatar: 'http://example.com/avatar.jpg'
+  })
+} catch (error) {
+  // 错误会自动弹窗显示，也可以自定义处理
+  console.error('调用失败:', error.message)
+}
+```
+
+### 3. JQL数据库操作（推荐）
+
+#### 3.1 JQL简介
+JQL（JavaScript Query Language）是uniCloud推荐的数据库操作方式，具有以下优势：
+- **简化语法**：比传统MongoDB API和SQL更清晰易懂
+- **内置权限**：支持DB Schema权限控制和uni-id角色权限
+- **联表查询**：极大简化了联表查询和树查询的复杂度
+- **类型安全**：配合JSDoc提供完整的类型提示
+
+#### 3.2 基本用法
+```javascript
+// 云对象中使用JQL操作数据库
+module.exports = {
+  async getUserList(page = 1, size = 10) {
+    // 注意：使用 databaseForJQL() 而不是 database()
+    const db = uniCloud.databaseForJQL()
+    
+    // JQL语法：简洁明了的查询
+    const result = await db.collection('user_info')
+      .where('status == 1 && age > 18') // 支持JS表达式
+      .field('username,email,avatar,create_time') // 字段筛选
+      .orderBy('create_time desc') // 排序
+      .skip((page - 1) * size) // 分页
+      .limit(size)
+      .get()
+    
+    return {
+      errCode: 0,
+      data: result.data,
+      total: result.total
+    }
+  }
+}
+```
+
+#### 3.3 JQL联表查询示例
+```javascript
+// 订单与用户信息联表查询
+async getOrderList() {
+  const db = uniCloud.databaseForJQL()
+  
+  const result = await db.collection('orders')
+    .where('status == "paid"')
+    .field('order_no,amount,create_time,user_id.username,user_id.avatar')
+    // user_id 自动关联 user_info 表，并获取 username 和 avatar 字段
+    .orderBy('create_time desc')
+    .get()
+  
+  return result.data
+}
+```
+
+#### 3.4 JQL树查询示例
+```javascript
+// 查询分类树结构
+async getCategoryTree() {
+  const db = uniCloud.databaseForJQL()
+  
+  // getTree 自动构建树形结构
+  const result = await db.collection('categories')
+    .where('status == 1')
+    .field('name,sort,parent_id')
+    .orderBy('sort asc')
+    .getTree({
+      limitLevel: 3, // 限制层级
+      startWith: 'parent_id==null' // 从根节点开始
+    })
+  
+  return result.data
+}
+```
+
+#### 3.5 JQL统计查询示例
+```javascript
+// 数据统计和分组
+async getStatistics() {
+  const db = uniCloud.databaseForJQL()
+  
+  // 按日期分组统计订单
+  const orderStats = await db.collection('orders')
+    .where('create_time >= ${new Date().getTime() - 30*24*60*60*1000}') // 近30天
+    .groupBy('add(new Date(0), create_time) as date')
+    .groupField('sum(amount) as total_amount, count(*) as order_count')
+    .orderBy('date desc')
+    .get()
+  
+  // 获取统计计数
+  const userCount = await db.collection('user_info')
+    .where('status == 1')
+    .count()
+  
+  return {
+    orderStats: orderStats.data,
+    userCount: userCount.total
+  }
+}
+```
+
+#### 3.6 JQL vs 传统MongoDB API对比
+```javascript
+// ❌ 传统MongoDB API（复杂）
+const db = uniCloud.database()
+const dbCmd = db.command
+const result = await db.collection('user_info')
+  .where({
+    status: dbCmd.eq(1),
+    age: dbCmd.gt(18)
+  })
+  .field({
+    username: true,
+    email: true,
+    avatar: true
+  })
+  .orderBy('create_time', 'desc')
+  .skip((page - 1) * size)
+  .limit(size)
+  .get()
+
+// ✅ JQL语法（简洁）
+const db = uniCloud.databaseForJQL()
+const result = await db.collection('user_info')
+  .where('status == 1 && age > 18')
+  .field('username,email,avatar')
+  .orderBy('create_time desc')
+  .skip((page - 1) * size)
+  .limit(size)
+  .get()
+```
+
+#### 3.7 JQL最佳实践
+- **优先使用JQL**：新项目强烈推荐使用JQL而不是传统MongoDB API
+- **配置DB Schema**：充分利用JQL的权限控制和数据验证功能
+- **使用JSDoc注释**：为JQL查询添加详细的类型注释
+- **联表查询优化**：合理使用JQL的自动联表功能，避免N+1查询问题
+- **树查询场景**：优先考虑使用JQL的getTree方法处理层级数据
+
+### 4. 自动交互界面配置（HBuilderX 3.4.6+）
+```javascript
+// 默认配置 - 自动显示loading和错误提示
+const userCenter = uniCloud.importObject('user-center')
+
+// 自定义交互界面
+const userCenterCustom = uniCloud.importObject('user-center', {
+  customUI: false, // 是否取消自动展示交互界面
+  loadingOptions: {
+    title: '加载中...', // loading提示文字
+    mask: true // 是否使用透明遮罩
+  },
+  errorOptions: {
+    type: 'modal', // 错误展示方式：modal(弹框) | toast(消息框)
+    retry: false // 是否显示重试按钮
+  },
+  parseSystemError({ objectName, methodName, params, errCode, errMsg }) {
+    // 自定义系统错误处理
+    return {
+      errMsg: '系统错误，请稍后再试'
+    }
+  }
+})
+
+// 完全关闭自动交互界面
+const userCenterSilent = uniCloud.importObject('user-center', {
+  customUI: true // 关闭所有自动UI
+})
+```
+
+### 5. 云对象高级特性
+
+#### 5.1 定时触发方法
+```javascript
+module.exports = {
+  /**
+   * 定时触发方法 - 支持定时运行
+   * 在uniCloud控制台配置定时器触发
+   */
+  async _timing() {
+    console.log('定时任务执行:', new Date())
+    
+    // 执行定时业务逻辑
+    await this._cleanExpiredData()
+    
+    return {
+      errCode: 0,
+      message: '定时任务执行成功'
+    }
+  },
+  
+  async _cleanExpiredData() {
+    // 使用JQL操作数据库（推荐）
+    const db = uniCloud.databaseForJQL()
+    const expireTime = Date.now() - 30 * 24 * 60 * 60 * 1000 // 30天前
+    
+    await db.collection('temp_data')
+      .where(`create_time < ${expireTime}`) // JQL条件表达式
+      .remove()
+  }
+}
+```
+
+#### 5.2 云对象内置API使用
+```javascript
+module.exports = {
+  async getRequestInfo() {
+    // 获取客户端信息
+    const clientInfo = this.getClientInfo()
+    console.log('客户端信息:', {
+      appId: clientInfo.appId,
+      platform: clientInfo.platform,
+      locale: clientInfo.locale
+    })
+    
+    // 获取云端信息
+    const cloudInfo = this.getCloudInfo()
+    console.log('云端信息:', {
+      provider: cloudInfo.provider,
+      spaceId: cloudInfo.spaceId,
+      functionName: cloudInfo.functionName
+    })
+    
+    // 获取当前调用方法名
+    const methodName = this.getMethodName()
+    console.log('当前方法:', methodName)
+    
+    // 获取当前参数列表
+    const params = this.getParams()
+    console.log('调用参数:', params)
+    
+    // 获取请求ID
+    const requestId = this.getUniCloudRequestId()
+    console.log('请求ID:', requestId)
+    
+    return {
+      errCode: 0,
+      data: { clientInfo, cloudInfo, methodName, params, requestId }
+    }
+  }
+}
+```
+
+#### 5.3 多个方法共享逻辑
+```javascript
+// 云对象外部定义公共函数
+async function validateUserData(userData) {
+  if (!userData.username || !userData.email) {
+    throw new Error('用户名和邮箱不能为空')
+  }
+  
+  // 验证邮箱格式
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(userData.email)) {
+    throw new Error('邮箱格式不正确')
+  }
+}
+
+module.exports = {
+  async addUser(userData) {
+    // 调用外部公共函数
+    await validateUserData(userData)
+    
+    // 使用JQL操作数据库（推荐）
+    const db = uniCloud.databaseForJQL()
+    const result = await db.collection('user_info').add({
+      ...userData,
+      create_time: Date.now()
+    })
+    
+    return {
+      errCode: 0,
+      data: { id: result.id }
+    }
+  },
+  
+  async updateUser(id, userData) {
+    // 复用验证逻辑
+    await validateUserData(userData)
+    
+    const db = uniCloud.databaseForJQL()
+    await db.collection('user_info').doc(id).update({
+      ...userData,
+      update_time: Date.now()
+    })
+    
+    return {
+      errCode: 0,
+      message: '更新成功'
+    }
+  }
+}
+```
+
+#### 5.4 JSDoc+ 语法提示
+```javascript
+module.exports = {
+  /**
+   * 添加用户
+   * @param {string} username 用户名
+   * @param {string} email 邮箱地址
+   * @param {string} password 密码
+   * @param {Array<string>} roles 用户角色数组
+   * @returns {object} 返回添加结果
+   */
+  async addUser(username, email, password, roles = ['user']) {
+    if (!username || !email || !password) {
+      throw new Error('用户名、邮箱和密码不能为空')
+    }
+    
+    const db = uniCloud.databaseForJQL()
+    const result = await db.collection('user_info').add({
+      username,
+      email,
+      password_hash: this._hashPassword(password),
+      roles,
+      create_time: Date.now(),
+      status: 1
+    })
+    
+    return {
+      errCode: 0,
+      data: { 
+        id: result.id,
+        username,
+        email,
+        roles
+      }
+    }
+  },
+  
+  /**
+   * 私有方法：密码加密
+   * @param {string} password 原始密码
+   * @returns {string} 加密后的密码
+   */
+  _hashPassword(password) {
+    // 实际项目中应该使用更安全的加密方式
+    const crypto = require('crypto')
+    return crypto.createHash('sha256').update(password).digest('hex')
+  }
+}
+```
+
+## 传统云函数（兼容性考虑）
+
+### 1. 传统云函数结构（不推荐新项目使用）
+```javascript
+// 传统云函数入口文件 index.js
+'use strict';
+const db = uniCloud.databaseForJQL()
+
+exports.main = async (event, context) => {
+  // event 为客户端上传的参数
+  // context 包含调用信息和运行状态
+  
+  const { action, data } = event
+  
+  switch (action) {
+    case 'add':
+      return await addData(data)
+    case 'update':
+      return await updateData(data)
+    case 'delete':
+      return await deleteData(data)
+    case 'list':
+      return await getList(data)
+    default:
+      return {
+        code: 400,
+        message: '无效的操作'
+      }
+  }
+}
+```
+
+**云函数 vs 云对象对比**：
+
+| 特性 | 传统云函数 | 云对象（推荐） |
+|------|------------|----------------|
+| 性能 | 存在冷启动问题 | 实例复用，性能更好 |
+| 代码组织 | 单一入口，需要switch分发 | 面向对象，方法自动路由 |
+| 开发体验 | 传统函数式编程 | 支持类、继承等OOP特性 |
+| 类型支持 | JSDoc注释 | 完整的JSDoc+语法支持 |
+| 调用方式 | uniCloud.callFunction | uniCloud.importObject |
+| 维护性 | 代码组织相对复杂 | 代码结构清晰，易维护 |
+
+### 2. 统一响应格式
+```javascript
+// 成功响应
+{
+  code: 0,
+  message: 'success',
+  data: {}
+}
+
+// 错误响应
+{
+  code: 400,
+  message: '错误信息',
+  data: null
+}
+```
+
+### 3. 错误处理
+```javascript
+try {
+  const result = await db.collection('users').get()
+  return {
+    code: 0,
+    data: result.data
+  }
+} catch (error) {
+  console.error('查询失败:', error)
+  return {
+    code: 500,
+    message: '服务器内部错误'
+  }
+}
+```
+
+## 云数据库使用
+
+### 1. 集合操作
+```javascript
+const db = uniCloud.databaseForJQL()
+const collection = db.collection('tableName')
+
+// 增加记录
+await collection.add({
+  name: '张三',
+  age: 20,
+  create_time: Date.now()
+})
+
+// 查询记录
+const result = await collection
+  .where({ status: 1 })
+  .orderBy('create_time', 'desc')
+  .limit(10)
+  .get()
+
+// 更新记录
+await collection.doc('docId').update({
+  name: '李四',
+  update_time: Date.now()
+})
+
+// 删除记录
+await collection.doc('docId').remove()
+```
+
+### 2. 数据库安全规则
+```json
+{
+  "read": "doc._id == auth.uid || 'admin' in auth.role",
+  "create": "auth != null",
+  "update": "doc._id == auth.uid || 'admin' in auth.role",
+  "delete": "'admin' in auth.role"
+}
+```
+
+## 云存储使用
+
+### 1. 文件上传
+```javascript
+// 客户端上传文件
+uni.chooseImage({
+  count: 1,
+  success: async (res) => {
+    const tempFilePath = res.tempFilePaths[0]
+    
+    const uploadResult = await uniCloud.uploadFile({
+      filePath: tempFilePath,
+      cloudPath: `images/${Date.now()}.jpg`
+    })
+    
+    console.log('上传成功:', uploadResult.fileID)
+  }
+})
+```
+
+### 2. 文件删除
+```javascript
+// 云函数中删除文件
+await uniCloud.deleteFile({
+  fileList: [fileID]
+})
+```
+
+## uni-id 用户体系
+
+### 1. 用户注册登录
+```javascript
+// 云函数中
+const uniID = require('uni-id')
+
+// 用户注册
+const registerResult = await uniID.register({
+  username: 'testuser',
+  password: '123456',
+  mobile: '13800138000'
+})
+
+// 用户登录
+const loginResult = await uniID.login({
+  username: 'testuser',
+  password: '123456'
+})
+```
+
+### 2. 权限验证
+```javascript
+// 客户端验证登录状态
+const checkToken = await uniCloud.callFunction({
+  name: 'user-center',
+  data: {
+    action: 'checkToken'
+  }
+})
+
+if (checkToken.result.code === 0) {
+  console.log('用户已登录')
+} else {
+  uni.navigateTo({
+    url: '/pages/login/login'
+  })
+}
+```
+
+## 官方推荐最佳实践
+
+### 1. 技术选型建议（官方推荐）
+根据业务场景选择合适的技术：
+
+1. **以数据库操作为主**：推荐使用 **JQL（JavaScript Query Language）**，开发效率最高
+2. **复杂业务逻辑 + 数据库操作**：推荐使用 **云对象** + **JQL**
+3. **不操作数据库的复杂逻辑**：推荐使用 **云对象**
+4. **传统云函数**：不再推荐新项目使用
+
+#### JQL优势（官方推荐）
+- **降低学习成本**：比SQL和传统MongoDB API更清晰、易掌握
+- **强大的Schema支持**：内置数据规则和权限，支持uni-id角色权限
+- **简化联表查询**：极大简化了联表查询和树查询的复杂度
+- **虚拟表支持**：支持更加灵活的虚拟表操作
+
+### 2. 云对象命名和组织规范
+- 使用连字符分隔：`user-center`、`data-manage`
+- 功能模块化：按业务模块组织
+- 一个云对象包含多个相关方法
+- **文件名要求**：`index.obj.js`（云对象唯一支持的入口文件名）
+
+### 3. JavaScript云对象最佳实践
+```javascript
+// 推荐的JavaScript云对象结构
+// uniCloud/cloudfunctions/admin-api/index.obj.js
+
+/**
+ * 管理员API云对象
+ * 使用JSDoc提供完整的类型注释和文档
+ */
+module.exports = {
+  /**
+   * 预处理：统一的权限验证和初始化
+   */
+  _before() {
+    this.startTime = Date.now()
+    this.currentUser = this.getCloudInfo().uniIdToken
+    // 使用JQL数据库（推荐）
+    this.db = uniCloud.databaseForJQL()
+    
+    // 管理员权限验证
+    if (!this.currentUser || !this.currentUser.role?.includes('admin')) {
+      throw new Error('需要管理员权限')
+    }
+  },
+
+  /**
+   * 创建管理员用户
+   * @param {Object} options - 创建参数
+   * @param {string} options.username - 用户名
+   * @param {string} options.email - 邮箱
+   * @param {string} [options.role='admin'] - 用户角色
+   * @param {string[]} [options.permissions=['read']] - 权限列表
+   * @returns {Promise<Object>} 返回结果 { errCode: number, errMsg: string, data: { uid: string } }
+   */
+  async createAdminUser(options) {
+    // 数据验证
+    if (!options.username || !options.email) {
+      throw new Error('用户名和邮箱不能为空')
+    }
+
+    const userData = {
+      username: options.username,
+      email: options.email,
+      role: options.role || 'admin',
+      permissions: options.permissions || ['read'],
+      createTime: Date.now(),
+      status: 1
+    }
+
+    const result = await this.db.collection('admin_users').add(userData)
+    
+    return {
+      errCode: 0,
+      errMsg: 'success',
+      data: { uid: result.id }
+    }
+  },
+
+  /**
+   * 获取管理员列表
+   * @param {number} [page=1] - 页码
+   * @param {number} [size=10] - 每页数量
+   * @returns {Promise<Object>} 返回列表数据
+   */
+  async getAdminList(page = 1, size = 10) {
+    // 使用JQL语法 - 一次查询获取数据和总数
+    const result = await this.db.collection('admin_users')
+      .where('status == 1') // JQL条件查询
+      .field('username,email,role,permissions,createTime,status') // 字段筛选
+      .orderBy('createTime desc') // JQL排序语法
+      .skip((page - 1) * size)
+      .limit(size)
+      .get({
+        getCount: true // 同时获取总数
+      })
+
+    return {
+      errCode: 0,
+      errMsg: 'success',
+      data: {
+        list: result.data,
+        total: result.count,
+        page,
+        size
+      }
+    }
+  },
+
+  /**
+   * 更新管理员信息
+   * @param {string} uid - 用户ID
+   * @param {Object} updateData - 更新数据
+   * @returns {Promise<Object>} 更新结果
+   */
+  async updateAdmin(uid, updateData) {
+    if (!uid) {
+      throw new Error('用户ID不能为空')
+    }
+
+    // 过滤不允许更新的字段
+    const allowedFields = ['username', 'email', 'role', 'permissions', 'status']
+    const filteredData = {}
+    
+    for (const field of allowedFields) {
+      if (updateData.hasOwnProperty(field)) {
+        filteredData[field] = updateData[field]
+      }
+    }
+    
+    filteredData.updateTime = Date.now()
+
+    // 使用JQL语法更新数据
+    await this.db.collection('admin_users')
+      .where(`_id == "${uid}"`)
+      .update(filteredData)
+    
+    return {
+      errCode: 0,
+      errMsg: 'success'
+    }
+  }
+}
+```
+
+### 4. 项目配置推荐
+
+#### 4.1 package.json 依赖配置
+```json
+{
+  "name": "uni-admin",
+  "version": "1.0.0",
+  "dependencies": {
+    "@dcloudio/uni-app": "latest",
+    "@dcloudio/uni-ui": "latest"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "latest",
+    "eslint": "^8.0.0",
+    "prettier": "^2.0.0"
+  }
+}
+```
+
+#### 4.2 云函数开发配置
+```javascript
+// uniCloud/cloudfunctions/common/utils.js
+// 公共工具函数模块
+
+/**
+ * 统一响应格式
+ * @param {number} errCode - 错误码，0表示成功
+ * @param {string} errMsg - 响应消息
+ * @param {*} data - 响应数据
+ * @returns {Object} 标准响应格式
+ */
+function createResponse(errCode = 0, errMsg = 'success', data = null) {
+  return {
+    errCode,
+    errMsg,
+    data,
+    timestamp: Date.now()
+  }
+}
+
+/**
+ * 参数验证工具
+ * @param {Object} params - 待验证参数
+ * @param {Array} required - 必需字段数组
+ * @throws {Error} 参数验证失败时抛出错误
+ */
+function validateParams(params, required = []) {
+  for (const field of required) {
+    if (!params.hasOwnProperty(field) || params[field] === undefined || params[field] === null) {
+      throw new Error(`缺少必需参数: ${field}`)
+    }
+  }
+}
+
+module.exports = {
+  createResponse,
+  validateParams
+}
+```
+
+### 2. 数据库设计规范
+- 集合名使用下划线：`user_info`、`order_list`
+- 字段名使用驼峰：`createTime`、`updateTime`
+- 必备字段：`_id`、`create_time`、`update_time`
+
+### 3. 安全规范
+- 敏感操作必须在云函数中进行
+- 使用数据库安全规则控制数据访问
+- 客户端传参数据校验
+- 避免在客户端暴露关键信息
+
+### 4. 性能优化和注意事项
+- **优先使用云对象**：官方不再推荐传统云函数
+- 合理使用数据库索引
+- 避免深度嵌套查询
+- 使用分页查询处理大量数据
+- 云对象保持轻量化，避免长时间运行
+- 云对象实例复用，减少初始化开销
+
+### 5. 云对象开发约束
+
+#### 5.1 文件命名约束
+- **云对象入口文件**：必须是 `index.obj.js`（不是 `index.js`）
+- **文件格式**：云对象只支持JavaScript格式，不支持TypeScript
+
+#### 5.2 开发约束
+- **方法约束**：所有 `_` 开头的方法都是私有方法，客户端不可访问
+- **导出约束**：云对象的导出方法不可以是箭头函数（会导致this指向错误）
+- **语法要求**：使用ES6+语法，支持async/await、解构等现代JavaScript特性
+- **参数限制**：
+  - 支付宝云：接收参数不超过6MB
+  - 阿里云：接收参数不超过2MB  
+  - 腾讯云：接收参数不超过5MB
+
+#### 5.3 代码规范建议
+- **JSDoc注释**：使用完整的JSDoc注释提供类型提示和文档
+- **错误处理**：统一使用try-catch处理异常，返回标准错误格式
+- **命名规范**：方法名使用驼峰命名，语义化清晰
+
+## 调试和部署
+
+### 1. 本地调试
+```bash
+# 运行云对象/云函数本地调试
+npm run dev:mp-weixin
+
+# 云对象调用示例
+const obj = uniCloud.importObject('test-object')
+await obj.testMethod()
+
+# 传统云函数调用示例（兼容性）
+uniCloud.callFunction({
+  name: 'test',
+  data: {},
+  success: res => console.log(res),
+  fail: err => console.error(err)
+})
+```
+
+### 2. 云端部署
+- 使用HBuilderX一键上传云对象/云函数
+- 云对象支持热更新，部署更便捷
+- 配置定时触发器
+- 监控执行情况和性能指标
+- 定期备份云数据库
+
+### 3. 迁移指南：从云函数到云对象
+
+#### 3.1 调用方式对比
+```javascript
+// 旧的云函数方式（不再推荐）
+const result = await uniCloud.callFunction({
+  name: 'user-center',
+  data: {
+    action: 'getUserInfo',
+    uid: 'user123'
+  }
+})
+
+// 新的云对象方式（官方推荐）
+const userCenter = uniCloud.importObject('user-center')
+const result = await userCenter.getUserInfo('user123')
+```
+
+#### 3.2 代码结构对比
+```javascript
+// 传统云函数 - 需要switch分发 (不推荐)
+exports.main = async (event, context) => {
+  const { action, data } = event
+  switch(action) {
+    case 'getUserInfo':
+      return await getUserInfo(data.uid)
+    case 'updateUser': 
+      return await updateUser(data.uid, data.info)
+    default:
+      return { errCode: 'METHOD_NOT_FOUND' }
+  }
+}
+
+// 云对象 - 直接方法调用 (推荐)
+module.exports = {
+  async getUserInfo(uid) {
+    // 直接实现业务逻辑
+  },
+  
+  async updateUser(uid, info) {
+    // 直接实现业务逻辑
+  }
+}
+```
+
+#### 3.3 迁移优势总结
+- **代码量减少**：官方示例显示代码行数大幅减少
+- **思路更清晰**：直接调用API，不需要传输json接口
+- **性能更好**：避免冷启动问题
+- **开发效率**：更好的IDE支持和代码提示
+- **维护性**：更简单的错误处理和调试
+- **类型安全**：完整的JSDoc+注释支持，提供类型提示

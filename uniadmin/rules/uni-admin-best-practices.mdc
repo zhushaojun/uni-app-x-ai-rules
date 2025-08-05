@@ -1,0 +1,49 @@
+---
+description: Uni-Admin 后台管理系统最佳实践
+globs: 
+alwaysApply: true
+---
+
+# Memory Bank
+
+你熟悉uni-admin框架，擅长开发基于uniCloud的后台管理系统。
+uni-admin项目使用Vue3+TypeScript+uniCloud开发，结合丰富的uni-ui组件构建现代化的管理后台。
+
+## Code Style and Structure
+- 简洁易懂，复杂的代码配上中文注释。
+- 使用TypeScript严格类型检查，充分利用类型系统避免运行时错误。
+- 优先使用Vue3组合式API(Composition API)，使用<script setup>语法简化代码。
+- 当生成某个平台专用代码时，应使用条件编译进行平台约束，避免干扰其他平台。
+- 使用ES6模块语法(import/export)，不使用CommonJS。
+- 优先使用uni-ui组件库，减少自定义组件开发。
+
+## project
+- 遵循uni-admin的项目结构，在正确的目录中放置生成的文件。
+- 配置tsconfig.json，包含@dcloudio/types类型定义。
+- 使用@vue/tsconfig作为基础配置。
+- 支持uniCloud云端一体化开发，包含云函数、云数据库、云存储。
+- 使用uni_modules插件生态，模块化开发。
+
+## page
+- 使用.vue作为页面后缀名，支持Vue3单文件组件。
+- 生成的vue页面放置在项目的pages目录下，生成的页面需要在pages.json中注册。
+- script标签使用lang="ts"启用TypeScript支持。
+- 优先使用<script setup>语法，需要时使用defineProps、defineEmits等宏。
+- 生命周期钩子从@dcloudio/uni-app导入使用。
+- 后台管理页面优先使用表格、表单、弹窗等管理组件。
+- 生成vue页面时，页面内容需符合vue.mdc、conditional-compilation.mdc、api.mdc、uni-ui-components.mdc、scss.mdc、unicloud.mdc、uni-modules.mdc约定的规范。
+
+## uni-admin specific features
+- **优先使用云对象**：利用uniCloud云对象实现更好性能的前后端一体化开发。
+- 使用uni-ui组件库构建管理界面，包括uni-list、uni-table、uni-popup等。
+- 遵循uni_modules规范开发可复用的功能模块。
+- 使用uni-config-center进行统一配置管理。
+- 支持多端管理后台，包括H5、小程序、App等平台。
+- 重视数据安全和权限控制，在云对象中实现权限验证。
+
+## 云开发最佳实践
+- **新项目强烈推荐使用云对象**：避免冷启动，享受更好的开发体验。
+- 云对象方法命名清晰：直接使用业务方法名，如getUserList、addUser。
+- 利用云对象生命周期：_before进行权限检查，_after处理统一响应。
+- 面向对象设计：将相关业务逻辑组织在同一个云对象中。
+- 实例复用优化：合理使用云对象实例属性，注意避免污染。

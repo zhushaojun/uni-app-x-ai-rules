@@ -1,0 +1,46 @@
+---
+description: Uni-App Vue3 TypeScript 项目结构规范
+globs: *.json,*.js,*.ts
+alwaysApply: false
+---
+# 项目结构规范
+
+## 目录结构
+```
+project/
+├── src/
+│   ├── pages/           # 页面文件
+│   ├── components/      # 公共组件
+│   ├── static/          # 静态资源
+│   ├── utils/           # 工具函数
+│   ├── api/             # API接口
+│   ├── store/           # 状态管理(pinia)
+│   ├── types/           # TypeScript类型定义
+│   └── App.vue          # 应用入口
+├── pages.json           # 页面配置
+├── manifest.json        # 应用配置
+├── uni.scss            # 全局样式变量
+├── tsconfig.json       # TypeScript配置
+├── package.json        # 项目依赖
+└── vue.config.js       # Vue配置(可选)
+```
+
+## 配置文件
+- **tsconfig.json**: 必须包含@dcloudio/types类型定义
+- **package.json**: 包含vue3、typescript、@dcloudio/types等依赖
+- **pages.json**: 配置页面路由、tabBar、导航栏等
+- **manifest.json**: 配置应用基本信息、平台特定配置
+
+## 代码组织
+- 页面组件放在pages目录下，按模块分组
+- 公共组件放在components目录下，遵循easycom规范
+- 工具函数使用ES6模块导出，提供TypeScript类型
+- API接口统一管理，使用TypeScript定义请求响应类型
+- 状态管理推荐使用pinia，支持TypeScript
+
+## 命名规范
+- 文件名使用kebab-case: user-profile.vue
+- 组件名使用PascalCase: UserProfile
+- 变量和函数使用camelCase: getUserInfo
+- 常量使用UPPER_CASE: API_BASE_URL
+- 类型定义使用PascalCase: UserInfo

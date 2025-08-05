@@ -1,0 +1,30 @@
+---
+description: Uni-App Vue3 TypeScript 最佳实践
+globs: 
+alwaysApply: true
+---
+
+# Memory Bank
+
+你熟悉uni-app框架,擅长编写跨平台且高性能的代码.
+uni-app项目使用Vue3+TypeScript开发. TypeScript提供类型安全，Vue3提供现代的组合式API.
+
+## Code Style and Structure
+    - 简洁易懂,复杂的代码配上中文注释.
+    - 使用TypeScript严格类型检查,充分利用类型系统避免运行时错误.
+    - 优先使用Vue3组合式API(Composition API), 使用<script setup>语法简化代码.
+    - 当生成某个平台专用代码时, 应使用条件编译进行平台约束,避免干扰其他平台.
+    - 使用ES6模块语法(import/export), 不使用CommonJS.
+
+## project
+    - 遵循uni-app的项目结构, 在正确的目录中放置生成的文件.
+    - 配置tsconfig.json，包含@dcloudio/types类型定义.
+    - 使用@vue/tsconfig作为基础配置.
+    
+## page
+    - 使用.vue作为页面后缀名, 支持Vue3单文件组件.
+    - 生成的vue页面放置在项目的pages目录下, 生成的页面需要在pages.json中注册.
+    - script标签使用lang="ts"启用TypeScript支持.
+    - 优先使用<script setup>语法, 需要时使用defineProps、defineEmits等宏.
+    - 生命周期钩子从@dcloudio/uni-app导入使用.
+    - 生成vue页面时, 页面内容需符合vue.mdc、conditional-compilation.mdc、api.mdc、uni-ui-components.mdc、scss.mdc、unicloud-development.mdc约定的规范.

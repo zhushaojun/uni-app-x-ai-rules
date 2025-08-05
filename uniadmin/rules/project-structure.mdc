@@ -1,0 +1,176 @@
+---
+description: Uni-Admin 后台管理系统项目结构规范
+globs: *.json,*.js,*.ts
+alwaysApply: false
+---
+# uni-admin 项目结构规范
+
+## 目录结构
+```
+uni-admin/
+├── pages/                    # 页面文件
+│   ├── index/               # 首页
+│   ├── system/              # 系统管理
+│   ├── user/                # 用户管理
+│   └── ...                  # 其他业务模块
+├── components/               # 公共组件
+│   ├── admin-table/         # 管理表格组件
+│   ├── admin-form/          # 管理表单组件
+│   └── ...                  # 其他公共组件
+├── uni_modules/              # uni_modules插件
+│   ├── uni-list/            # 列表组件
+│   ├── uni-table/           # 表格组件
+│   ├── uni-upgrade-center/  # 升级中心
+│   ├── uni-stat/            # 统计分析
+│   └── ...                  # 其他插件
+├── uniCloud/                 # 云端代码
+│   ├── cloudfunctions/      # 云函数
+│   │   ├── common/          # 公共模块
+│   │   ├── user-center/     # 用户中心
+│   │   ├── admin-api/       # 管理接口
+│   │   └── ...              # 其他云函数
+│   └── database/            # 数据库初始化
+│       ├── db_init.json     # 数据库初始化
+│       └── *.schema.json    # 数据库表结构
+├── static/                   # 静态资源
+│   ├── images/              # 图片资源
+│   ├── icons/               # 图标资源
+│   └── ...                  # 其他静态文件
+├── js_sdk/                   # JS SDK
+├── utils/                    # 工具函数
+│   ├── request.js           # 网络请求
+│   ├── auth.js              # 权限管理
+│   └── ...                  # 其他工具
+├── store/                    # 状态管理
+│   ├── index.js             # store入口
+│   ├── modules/             # 模块化store
+│   └── ...                  # 其他状态文件
+├── pages.json                # 页面配置
+├── manifest.json             # 应用配置
+├── uni.scss                  # 全局样式变量
+├── App.vue                   # 应用入口
+├── main.js                   # 主入口文件
+├── tsconfig.json             # TypeScript配置
+├── package.json              # 项目依赖
+└── vue.config.js             # Vue配置(可选)
+```
+
+## 核心配置文件
+
+### 1. pages.json - 页面路由配置
+```json
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "管理首页"
+      }
+    }
+  ],
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^uni-(.*)": "@dcloudio/uni-ui/lib/uni-$1/uni-$1.vue"
+    }
+  },
+  "condition": {
+    "current": 0,
+    "list": [
+      {
+        "name": "index",
+        "path": "pages/index/index"
+      }
+    ]
+  }
+}
+```
+
+### 2. manifest.json - 应用配置
+```json
+{
+  "name": "uni-admin",
+  "appid": "__UNI__XXXXXX",
+  "description": "uni-admin管理系统",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "app-plus": {
+    "usingComponents": true
+  },
+  "h5": {
+    "title": "uni-admin",
+    "router": {
+      "mode": "hash"
+    }
+  },
+  "uniStatistics": {
+    "enable": false
+  }
+}
+```
+
+### 3. package.json - 项目依赖
+```json
+{
+  "name": "uni-admin",
+  "version": "1.0.0",
+  "dependencies": {
+    "@dcloudio/uni-app": "latest",
+    "@dcloudio/uni-ui": "latest",
+    "vue": "^3.0.0",
+    "typescript": "^4.0.0"
+  }
+}
+```
+
+## 代码组织规范
+
+### 1. 页面组织
+- 按业务模块分组：`pages/user/`、`pages/system/`
+- 每个页面包含：页面文件、样式文件、可选的页面专用组件
+- 管理页面通常包含列表页、详情页、编辑页
+
+### 2. 组件组织
+- 公共组件放在`components/`目录，遵循easycom规范
+- uni_modules插件组件自动识别和注册
+- 页面专用组件可放在页面目录下的components子目录
+
+### 3. 云端代码组织
+- 云函数按功能模块分组
+- 使用common目录存放公共代码
+- 数据库schema文件统一管理
+
+### 4. 工具函数组织
+- 网络请求、权限验证等核心工具独立文件
+- 业务相关工具按模块分组
+- 提供TypeScript类型定义
+
+## 命名规范
+
+### 1. 文件和目录命名
+- 文件名使用kebab-case：`user-list.vue`
+- 目录名使用kebab-case：`user-center/`
+- 云函数名使用kebab-case：`admin-api`
+
+### 2. 代码命名
+- 组件名使用PascalCase：`UserList`
+- 变量和函数使用camelCase：`getUserList`
+- 常量使用UPPER_CASE：`API_BASE_URL`
+- 类型定义使用PascalCase：`UserInfo`
+
+### 3. uni-admin特有命名
+- 管理页面前缀：`admin-`
+- 数据库集合名：下划线分隔如`user_info`
+- 云函数响应字段：`code`、`message`、`data`
+
+## 权限和安全
+
+### 1. 目录权限
+- 管理页面需要登录验证
+- 敏感操作在云函数中进行
+- 使用uniCloud数据库安全规则
+
+### 2. 文件组织安全
+- 敏感配置放在云函数中
+- 客户端不存储关键信息
+- 使用环境变量管理配置

@@ -1,0 +1,15 @@
+---
+description: Uni-App API 使用规则
+globs: *.ts,*.vue,*.js
+alwaysApply: false
+---
+# API 使用规则
+- 可以使用uni-app的API, 如uni.navigateTo、uni.request等, 但注意版本和平台的兼容性.
+- 可以使用vue3的API, 如组合式API、响应式API等, 但注意版本和平台的兼容性.
+- 可以使用TypeScript的类型定义, 通过@dcloudio/types包获取uni-app相关类型.
+- 特定平台或特定版本以上才能使用的代码, 需使用条件编译包围这些代码.
+- 生命周期钩子从@dcloudio/uni-app导入, 如onLoad、onShow、onReady等.
+- 组合式API中使用onPageShow、onPageHide监听页面可见性变化.
+- 跨页面通信可使用uni.$emit、uni.$on或全局状态管理.
+- 使用uni.createSelectorQuery需在mounted生命周期后调用.
+- TypeScript项目需配置tsconfig.json, 包含@dcloudio/types类型定义.

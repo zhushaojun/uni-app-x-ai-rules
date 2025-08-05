@@ -1,0 +1,37 @@
+---
+description: TypeScript 开发规则和配置
+globs: *.ts,*.vue
+alwaysApply: false
+---
+# TypeScript 规则
+
+## 项目配置
+- 项目根目录需要tsconfig.json配置文件.
+- 继承@vue/tsconfig/tsconfig.json作为基础配置.
+- 包含@dcloudio/types类型定义包.
+- 配置路径别名："@/*": ["./src/*"].
+- 包含源码文件：src/**/*.ts, src/**/*.d.ts, src/**/*.tsx, src/**/*.vue.
+
+## 类型安全
+- 启用严格模式 strict: true.
+- 使用具体类型而不是any, 提高代码质量.
+- 为props、emits、computed等定义明确的类型.
+- 利用@dcloudio/types获取uni-app相关API的类型提示.
+
+## Vue组件TypeScript支持
+- 在<script>标签中使用lang="ts"启用TypeScript.
+- 组合式API中使用泛型定义ref类型：const count = ref<number>(0).
+- 使用interface或type定义复杂数据结构.
+- defineProps<{}>()语法定义带类型的props.
+- defineEmits<{}>()语法定义带类型的事件.
+
+## 模块系统
+- 使用ES6模块语法 import/export.
+- 不使用CommonJS的 require/module.exports.
+- 正确配置模块解析：moduleResolution: "node".
+- 支持JSON模块导入：resolveJsonModule: true.
+
+## 开发工具集成
+- 可在vue.config.js中禁用默认类型检查，使用vue-tsc单独检查.
+- HBuilderX项目自动支持TypeScript，CLI项目需手动配置.
+- 推荐在package.json中添加type-check脚本.
